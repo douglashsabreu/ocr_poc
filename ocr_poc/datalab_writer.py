@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Dict
 
 from ocr_poc.datalab_client import DatalabApiResult
+from ocr_poc.parser import OCRContentFormatter
 
 
 class DatalabApiResultWriter:
@@ -27,13 +28,13 @@ class DatalabApiResultWriter:
         return {"json": json_path, "text": text_path}
 
     def _format_text(self, result: DatalabApiResult) -> str:
-        if not result.text_per_page:
-            return ""
-
-        pages = []
-        for index, page_text in enumerate(result.text_per_page, start=1):
-            header = f"# Página {index}"
-            pages.append(f"{header}\n{page_text}".strip())
-
-        return "\n\n".join(pages)
-
+        formatter = OCRContentFormatter(result.parsed)
+        header = [
+            f"Request ID: {result.request_id}",
+            formatter.render_summary(),
+        ]
+        pages = formatter.render_pages()
+        if pages:
+            header.append("")
+            header.append(pages)
+        return "\n".join(part for part in header if part)

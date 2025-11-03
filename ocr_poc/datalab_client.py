@@ -9,6 +9,7 @@ from typing import Any, Dict, List
 import httpx
 
 from ocr_poc.config import AppSettings
+from ocr_poc.models import OCRFinalResponse
 
 
 @dataclass(frozen=True)
@@ -17,6 +18,7 @@ class DatalabApiResult:
 
     request_id: str
     raw: Dict[str, Any]
+    parsed: OCRFinalResponse
     text_per_page: List[str]
 
     @property
@@ -46,10 +48,12 @@ class DatalabApiClient:
         request_id = initial["request_id"]
         check_url = initial["request_check_url"]
         final_payload = self._poll_request(check_url)
-        text_per_page = self._extract_text(final_payload)
+        parsed = OCRFinalResponse.model_validate(final_payload)
+        text_per_page = self._extract_text(parsed)
         return DatalabApiResult(
             request_id=request_id,
             raw=final_payload,
+            parsed=parsed,
             text_per_page=text_per_page,
         )
 
@@ -119,24 +123,11 @@ class DatalabApiClient:
             payload["langs"] = self._settings.api_langs
         return payload
 
-    def _extract_text(self, payload: Dict[str, Any]) -> List[str]:
-        pages = payload.get("pages") or []
+    def _extract_text(self, response: OCRFinalResponse) -> List[str]:
+        pages = response.pages or []
         text_per_page: List[str] = []
         for page in pages:
-            lines = None
-            if isinstance(page, dict):
-                lines = page.get("lines") or page.get("text_lines")
-            if not isinstance(lines, list):
-                text_per_page.append("")
-                continue
-
-            text_lines: List[str] = []
-            for line in lines:
-                if isinstance(line, dict):
-                    text = line.get("text")
-                    if text:
-                        text_lines.append(str(text))
-            text_per_page.append("\n".join(text_lines))
+            text_per_page.append(page.as_single_block())
 
         return text_per_page
 
