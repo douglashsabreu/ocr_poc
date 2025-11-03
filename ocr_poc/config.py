@@ -23,16 +23,17 @@ class AppSettings(BaseSettings):
     inference_method: Literal["vllm", "hf"] = Field(
         "vllm", alias="CHANDRA_INFERENCE_METHOD"
     )
-    pipeline_mode: Literal["chandra", "datalab_api"] = Field(
+    pipeline_mode: Literal["chandra", "datalab_api", "openai_api"] = Field(
         "datalab_api", alias="PIPELINE_MODE"
     )
+    openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
+    openai_model: str = Field("gpt-5-mini", alias="OPENAI_MODEL")
+    openai_max_tokens: int = Field(2048, alias="OPENAI_MAX_TOKENS")
     images_dir: Path = Field(Path("images_example"), alias="IMAGES_DIR")
     output_dir: Path = Field(Path("outputs"), alias="OUTPUT_DIR")
 
     include_images: bool = Field(True, alias="INCLUDE_IMAGES")
-    include_headers_footers: bool = Field(
-        False, alias="INCLUDE_HEADERS_FOOTERS"
-    )
+    include_headers_footers: bool = Field(False, alias="INCLUDE_HEADERS_FOOTERS")
     max_output_tokens: int | None = Field(None, alias="MAX_OUTPUT_TOKENS")
     max_workers: int | None = Field(None, alias="MAX_WORKERS")
     max_retries: int | None = Field(None, alias="MAX_RETRIES")
@@ -40,13 +41,9 @@ class AppSettings(BaseSettings):
     api_max_pages: int | None = Field(None, alias="API_MAX_PAGES")
     api_skip_cache: bool = Field(False, alias="API_SKIP_CACHE")
     api_langs: str | None = Field(None, alias="API_LANGS")
-    api_poll_interval_seconds: float = Field(
-        2.0, alias="API_POLL_INTERVAL_SECONDS"
-    )
+    api_poll_interval_seconds: float = Field(2.0, alias="API_POLL_INTERVAL_SECONDS")
     api_max_poll_attempts: int = Field(60, alias="API_MAX_POLL_ATTEMPTS")
-    api_http_timeout_seconds: float = Field(
-        60.0, alias="API_HTTP_TIMEOUT_SECONDS"
-    )
+    api_http_timeout_seconds: float = Field(60.0, alias="API_HTTP_TIMEOUT_SECONDS")
     api_endpoint: str = Field("ocr", alias="API_ENDPOINT")
 
     @model_validator(mode="after")

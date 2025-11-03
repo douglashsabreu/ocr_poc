@@ -47,11 +47,29 @@ def run_datalab_api_pipeline(
             repository,
             api_client,
             api_writer,
+            provider_name="API Datalab",
             logger=logging.getLogger("ocr_poc.api"),
         )
         pipeline.run()
     finally:
         api_client.close()
+
+
+def run_openai_pipeline(settings: AppSettings, repository: ImageRepository) -> None:
+    from ocr_poc.api_pipeline import DatalabApiPipeline
+    from ocr_poc.datalab_writer import DatalabApiResultWriter
+    from ocr_poc.openai_client import OpenAIOCRClient
+
+    api_client = OpenAIOCRClient(settings)
+    api_writer = DatalabApiResultWriter(settings.output_dir)
+    pipeline = DatalabApiPipeline(
+        repository,
+        api_client,
+        api_writer,
+        provider_name="API OpenAI",
+        logger=logging.getLogger("ocr_poc.openai"),
+    )
+    pipeline.run()
 
 
 def main() -> None:
@@ -66,6 +84,8 @@ def main() -> None:
 
     if settings.pipeline_mode == "chandra":
         run_chandra_pipeline(settings, repository)
+    elif settings.pipeline_mode == "openai_api":
+        run_openai_pipeline(settings, repository)
     else:
         run_datalab_api_pipeline(settings, repository)
 

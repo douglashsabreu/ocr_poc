@@ -3,6 +3,7 @@
 This project evaluates the OCR capabilities offered by **Datalab**, wrapping the API in a modular, SOLID-oriented codebase. Two execution paths are available:
 
 - `datalab_api` (default): calls the REST endpoint `/api/v1/ocr` and parses the response into structured outputs.
+- `openai_api`: converts the image locally and sends it to an OpenAI multimodal model (e.g., `gpt-4o-mini`) for extraction.
 - `chandra`: runs the open-source `chandra-ocr` package locally or against a compatible vLLM server when deeper control is required.
 
 ### Prerequisites
@@ -12,6 +13,7 @@ This project evaluates the OCR capabilities offered by **Datalab**, wrapping the
 - Environment variables:
   - `DATALAB_API_KEY`: API key issued by Datalab.
   - `DATALAB_API_BASE`: API base URL (defaults to `https://www.datalab.to/api/v1`).
+  - `OPENAI_API_KEY`: required when `PIPELINE_MODE=openai_api`.
 
 ### Installation
 
@@ -34,6 +36,7 @@ What happens during a run:
 - Results are saved under `outputs/` (override via `OUTPUT_DIR`). For the REST path, outputs include:
   - A JSON dump mirroring the API payload.
   - A `.txt` companion containing a summary (status, page count) and the extracted lines per page in a reader-friendly format.
+  - A `_validation.json` file with structured delivery verification data and a matching PDF report summarising the findings (receiver, timestamps, invoices, issues).
 
 ### Configuration
 
@@ -41,11 +44,13 @@ Tune behaviour through environment variables:
 
 | Variable | Description |
 | --- | --- |
-| `PIPELINE_MODE` | Select `datalab_api` (default) or `chandra`. |
+| `PIPELINE_MODE` | Select `datalab_api` (default), `openai_api`, or `chandra`. |
 | `API_PAGE_RANGE` / `API_MAX_PAGES` | Restrict pages submitted to `/ocr`. |
 | `API_SKIP_CACHE` | Force re-processing when `true`. |
 | `API_POLL_INTERVAL_SECONDS` | Polling cadence between status checks (default `2`). |
 | `API_MAX_POLL_ATTEMPTS` | Maximum number of status checks (default `60`). |
+| `OPENAI_MODEL` | Model used when `PIPELINE_MODE=openai_api` (`gpt-4o-mini` by default). |
+| `OPENAI_MAX_TOKENS` | Cap for tokens returned by the OpenAI response (`1024` por padrão). |
 | `CHANDRA_INFERENCE_METHOD` | `vllm` (default) or `hf` when using the Chandra path. |
 | `INCLUDE_IMAGES` | Persist extracted images in Chandra mode. |
 | `MAX_OUTPUT_TOKENS`, `MAX_WORKERS`, `MAX_RETRIES` | Fine-tune Chandra requests. |
@@ -56,3 +61,4 @@ Tune behaviour through environment variables:
 - REST calls require the `X-API-Key` header; the client inserts it automatically from `.env`.
 - The parser layer (backed by Pydantic models) normalises the API response, removes duplicate lines, and produces user-facing summaries.
 - Logging runs at `INFO` level and reports progress, warnings, and failures.
+- To switch to OpenAI, set `PIPELINE_MODE=openai_api` and ensure `OPENAI_API_KEY` is exported.

@@ -8,6 +8,10 @@ from typing import Any, Dict, List
 
 import httpx
 
+class DatalabApiError(Exception):
+    """Raised when the Datalab API returns a non-recoverable error."""
+
+
 from ocr_poc.config import AppSettings
 from ocr_poc.models import OCRFinalResponse
 
