@@ -1,0 +1,13 @@
+[project]
+name = "ocr-poc"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "chandra-ocr",
+    "dotenv>=0.9.9",
+]
+
+[tool.uv.sources]
+chandra-ocr = { git = "https://github.com/datalab-to/chandra" }
