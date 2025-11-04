@@ -7,6 +7,79 @@ This project evaluates the OCR capabilities offered by **Datalab** and **Google 
 - `chandra`: runs the open-source `chandra-ocr` package locally or against a compatible vLLM server when deeper control is required.
 - `gdocai` (MVP): integra com o Google Document AI Enterprise Document OCR com quality score habilitado para gate e extração unificada.
 
+### Arquitetura
+
+#### Componentes
+
+```mermaid
+graph TB
+    Main[main.py] --> Config[AppSettings]
+    Main --> Repository[ImageRepository]
+    Main --> DocPipeline[DocumentPipeline]
+    Main --> Writer[DocumentResultWriter]
+    
+    DocPipeline --> GDocProvider[GoogleDocAiProvider]
+    DocPipeline --> DatalabClient[DatalabApiClient]
+    DocPipeline --> Normalization[normalize_to_lines_and_meta]
+    DocPipeline --> QualityGate[assess_quality]
+    
+    Normalization --> Models[Pydantic Models]
+    Writer --> ValidationEngine[Validation Engine]
+    Writer --> ReportGen[PDF Report Generator]
+    
+    GDocProvider --> |API| GoogleDocAI[Google Document AI]
+    DatalabClient --> |REST API| DatalabAPI[Datalab /ocr]
+    
+    ValidationEngine --> Fields[Field Extractors]
+    ValidationEngine --> LegacyValidation[Legacy Rules]
+```
+
+#### Fluxo de Execução
+
+```mermaid
+sequenceDiagram
+    participant Main
+    participant Pipeline as DocumentPipeline
+    participant Gate as Quality Gate
+    participant Provider as OCR Provider
+    participant Norm as Normalizer
+    participant Valid as Validator
+    participant Writer
+    
+    Main->>Pipeline: run()
+    loop Para cada imagem
+        Pipeline->>Pipeline: _process_file(path)
+        
+        alt use_gdoc_ai_gate = true
+            Pipeline->>Provider: GoogleDocAI.process_bytes()
+            Provider-->>Pipeline: raw_response
+            Pipeline->>Norm: normalize_to_lines_and_meta()
+            Norm-->>Pipeline: {lines, quality, raw}
+            Pipeline->>Gate: assess_quality()
+            Gate-->>Pipeline: {pass, score_min, hints}
+            
+            alt quality.pass = false
+                Pipeline-->>Main: PipelineOutcome (skipped)
+                Note over Pipeline,Main: Early exit - baixa qualidade
+            end
+        end
+        
+        Pipeline->>Provider: Datalab/GDocAI.process()
+        Provider-->>Pipeline: ocr_result
+        Pipeline->>Norm: normalize_to_lines_and_meta()
+        Norm-->>Pipeline: {lines, quality, raw}
+        Pipeline->>Gate: assess_quality()
+        Gate-->>Pipeline: quality_gate
+        
+        Pipeline-->>Main: PipelineOutcome
+        Main->>Writer: write(outcome)
+        Writer->>Valid: ValidationEngine.validate()
+        Valid-->>Writer: {decision, fields, issues}
+        Writer->>Writer: generate PDF report
+        Writer-->>Main: saved_artifacts
+    end
+```
+
 ### Prerequisites
 
 - Python 3.12+
