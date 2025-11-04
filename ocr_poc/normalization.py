@@ -14,7 +14,19 @@ def normalize_to_lines_and_meta(
     *,
     quality: Dict[str, Any] | None = None,
 ) -> Dict[str, Any]:
-    """Normalise provider-specific payloads to a common structure."""
+    """Normalise provider-specific payloads to a common structure.
+    
+    Args:
+        mode: OCR provider mode identifier (gdocai or datalab_api).
+        payload: Raw provider-specific response payload.
+        quality: Optional quality metrics to inject (used for datalab_api).
+        
+    Returns:
+        Normalized dictionary with keys: lines, full_text, quality, raw_payload.
+        
+    Raises:
+        ValueError: If the mode is not supported.
+    """
     if mode == "gdocai":
         return _normalise_gdocai(payload)
     if mode == "datalab_api":
@@ -23,6 +35,14 @@ def normalize_to_lines_and_meta(
 
 
 def _normalise_gdocai(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """Normalize Google Document AI response to common structure.
+    
+    Args:
+        payload: Google Document AI response with lines and quality data.
+        
+    Returns:
+        Normalized dictionary with standardized line format.
+    """
     lines = payload.get("lines", [])
     text = "\n".join(line.get("text", "") for line in lines if line.get("text"))
     return {
@@ -37,6 +57,15 @@ def _normalise_datalab(
     result: DatalabApiResult,
     quality: Dict[str, Any] | None,
 ) -> Dict[str, Any]:
+    """Normalize Datalab API response to common structure.
+    
+    Args:
+        result: Datalab API result object with parsed pages.
+        quality: Optional quality metrics from external quality gate.
+        
+    Returns:
+        Normalized dictionary with lines, text, and quality data.
+    """
     lines, text = _extract_datalab_lines(result)
     return {
         "lines": lines,
@@ -49,6 +78,14 @@ def _normalise_datalab(
 
 
 def _extract_datalab_lines(result: DatalabApiResult) -> Tuple[List[Dict[str, Any]], str]:
+    """Extract lines and full text from Datalab API result pages.
+    
+    Args:
+        result: Datalab API result with parsed page data.
+        
+    Returns:
+        Tuple of (list of line dictionaries, concatenated full text).
+    """
     aggregated_lines: List[Dict[str, Any]] = []
     text_blocks: List[str] = []
 
@@ -75,6 +112,14 @@ def _extract_datalab_lines(result: DatalabApiResult) -> Tuple[List[Dict[str, Any
 
 
 def _ensure_line_defaults(line: Dict[str, Any]) -> Dict[str, Any]:
+    """Ensure line dictionary has all standard fields with proper types.
+    
+    Args:
+        line: Raw line dictionary from provider.
+        
+    Returns:
+        Line dictionary with standardized fields.
+    """
     return {
         "text": line.get("text", ""),
         "confidence": float(line.get("confidence")) if line.get("confidence") is not None else None,
@@ -84,6 +129,14 @@ def _ensure_line_defaults(line: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def _resolve_bbox(line: Any) -> List[float] | None:
+    """Resolve bounding box from line bbox or polygon coordinates.
+    
+    Args:
+        line: Line object with optional bbox or polygon attributes.
+        
+    Returns:
+        Bounding box as [x_min, y_min, x_max, y_max] or None.
+    """
     if line.bbox:
         return list(line.bbox)
     if line.polygon:
@@ -98,6 +151,14 @@ def _resolve_bbox(line: Any) -> List[float] | None:
 
 
 def _iterate_points(polygon: Iterable[Iterable[float]]) -> Iterable[Iterable[float]]:
+    """Safely iterate over polygon points.
+    
+    Args:
+        polygon: Collection of coordinate points.
+        
+    Yields:
+        Individual point coordinates as iterables.
+    """
     for point in polygon or []:
         if isinstance(point, Iterable):
             yield point

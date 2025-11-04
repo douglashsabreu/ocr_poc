@@ -26,6 +26,15 @@ SIGNATURE_KEYWORDS = ("assinatura", "signature")
 
 @dataclass
 class ExtractedField:
+    """Represents a single extracted document field.
+    
+    Attributes:
+        name: Field identifier.
+        value: Extracted value (string, boolean, or None).
+        confidence: Confidence score for the extraction.
+        bbox: Bounding box coordinates [x0, y0, x1, y1].
+        page: Page number where field was found.
+    """
     name: str
     value: str | bool | None
     confidence: float | None
@@ -33,6 +42,11 @@ class ExtractedField:
     page: int | None = None
 
     def as_dict(self) -> Dict[str, object]:
+        """Convert field to dictionary format.
+        
+        Returns:
+            Dictionary with field data.
+        """
         return {
             "name": self.name,
             "value": self.value,
@@ -45,7 +59,15 @@ class ExtractedField:
 def extract_fields(
     lines: List[Dict[str, object]], full_text: str
 ) -> Dict[str, ExtractedField]:
-    """Return the MVP set of extracted fields."""
+    """Return the MVP set of extracted fields.
+    
+    Args:
+        lines: OCR lines with text, confidence, bbox, and page.
+        full_text: Complete document text.
+        
+    Returns:
+        Dictionary mapping field names to ExtractedField objects.
+    """
     indexed_lines = [_normalise_line(line, idx) for idx, line in enumerate(lines)]
     field_map: Dict[str, ExtractedField] = {}
 
@@ -58,6 +80,14 @@ def extract_fields(
 
 
 def _extract_date(lines: List[Dict[str, object]]) -> ExtractedField:
+    """Extract date field from document lines.
+    
+    Args:
+        lines: Normalized OCR lines.
+        
+    Returns:
+        ExtractedField with best date match or None value.
+    """
     best: Optional[ExtractedField] = None
     for line in lines:
         text = line["text"]
@@ -77,6 +107,14 @@ def _extract_date(lines: List[Dict[str, object]]) -> ExtractedField:
 
 
 def _extract_recipient(lines: List[Dict[str, object]]) -> ExtractedField:
+    """Extract recipient name from document lines.
+    
+    Args:
+        lines: Normalized OCR lines.
+        
+    Returns:
+        ExtractedField with recipient name or None value.
+    """
     best: Optional[ExtractedField] = None
     for line in lines:
         lowered = line["text"].lower()
@@ -99,6 +137,14 @@ def _extract_recipient(lines: List[Dict[str, object]]) -> ExtractedField:
 
 
 def _extract_signature(lines: List[Dict[str, object]]) -> ExtractedField:
+    """Detect signature presence in document.
+    
+    Args:
+        lines: Normalized OCR lines.
+        
+    Returns:
+        ExtractedField with boolean indicating signature presence.
+    """
     for line in lines:
         lowered = line["text"].lower()
         if not any(keyword in lowered for keyword in SIGNATURE_KEYWORDS):
@@ -126,6 +172,15 @@ def _extract_signature(lines: List[Dict[str, object]]) -> ExtractedField:
 def _extract_tracking(
     lines: List[Dict[str, object]], full_text: str
 ) -> ExtractedField:
+    """Extract tracking code from document.
+    
+    Args:
+        lines: Normalized OCR lines.
+        full_text: Complete document text for fallback search.
+        
+    Returns:
+        ExtractedField with tracking code or None value.
+    """
     best: Optional[ExtractedField] = None
     for line in lines:
         text = line["text"]
@@ -164,11 +219,16 @@ def _extract_tracking(
     return ExtractedField(name="tracking_code", value=None, confidence=0.0)
 
 
-# ---------------------------------------------------------------------------#
-# Helpers
-
-
 def _normalise_line(line: Dict[str, object], index: int) -> Dict[str, object]:
+    """Normalize OCR line to standard format with index.
+    
+    Args:
+        line: Raw OCR line data.
+        index: Line index in document.
+        
+    Returns:
+        Normalized line dictionary.
+    """
     return {
         "index": index,
         "text": str(line.get("text", "")),
@@ -179,6 +239,14 @@ def _normalise_line(line: Dict[str, object], index: int) -> Dict[str, object]:
 
 
 def _round_confidence(value: object) -> float | None:
+    """Round confidence value to 4 decimal places.
+    
+    Args:
+        value: Confidence value to round.
+        
+    Returns:
+        Rounded float or None if conversion fails.
+    """
     try:
         if value is None:
             return None
@@ -191,6 +259,15 @@ def _choose_best(
     current: Optional[ExtractedField],
     candidate: ExtractedField,
 ) -> ExtractedField:
+    """Choose field with highest confidence.
+    
+    Args:
+        current: Current best field or None.
+        candidate: New candidate field.
+        
+    Returns:
+        Field with higher confidence.
+    """
     if current is None:
         return candidate
     current_conf = current.confidence or 0.0
@@ -199,6 +276,14 @@ def _choose_best(
 
 
 def _normalize_date(raw: str) -> str:
+    """Normalize date string to YYYY-MM-DD format.
+    
+    Args:
+        raw: Raw date string in various formats.
+        
+    Returns:
+        Normalized date string.
+    """
     tokens = re.split(r"[/-]", raw)
     if len(tokens) != 3:
         return raw
@@ -213,6 +298,14 @@ def _normalize_date(raw: str) -> str:
 
 
 def _split_after_separator(text: str) -> str:
+    """Extract text after separator (colon, dash).
+    
+    Args:
+        text: Text potentially containing separator.
+        
+    Returns:
+        Text after separator or original text.
+    """
     parts = NAME_SEPARATORS.split(text, maxsplit=1)
     if len(parts) == 2:
         return parts[1].strip()
@@ -220,6 +313,14 @@ def _split_after_separator(text: str) -> str:
 
 
 def _clean_name(name: str) -> str:
+    """Clean name by removing punctuation and trailing digits.
+    
+    Args:
+        name: Raw name string.
+        
+    Returns:
+        Cleaned name string.
+    """
     cleaned = name.strip().strip(":.-–— ")
     cleaned = re.sub(r"\s{2,}", " ", cleaned)
     cleaned = cleaned.rstrip("0123456789")

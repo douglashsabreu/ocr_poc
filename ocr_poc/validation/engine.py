@@ -10,6 +10,18 @@ from ocr_poc.extraction.fields import ExtractedField
 
 @dataclass
 class ValidationOutcome:
+    """Encapsulates the result of document validation logic.
+    
+    Attributes:
+        decision: Final validation decision (OK, NEEDS_REVIEW, REPROVADO).
+        decision_score: Minimum confidence across all evaluated fields.
+        issues: List of validation issues found.
+        fields: Extracted fields with metadata.
+        quality: Quality assessment data.
+        engine_used: Primary OCR engine identifier.
+        engine_chain: Sequence of engines used in processing.
+        thresholds: Applied threshold values.
+    """
     decision: str
     decision_score: float
     issues: List[str] = field(default_factory=list)
@@ -20,6 +32,11 @@ class ValidationOutcome:
     thresholds: Dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> Dict[str, object]:
+        """Convert validation outcome to dictionary format.
+        
+        Returns:
+            Dictionary representation with all validation data.
+        """
         return {
             "decision": self.decision,
             "decision_score": round(self.decision_score, 4),
@@ -41,7 +58,19 @@ def run_validation(
     engine_used: str,
     engine_chain: Iterable[str],
 ) -> ValidationOutcome:
-    """Fuse extracted fields and quality scores into a high-level decision."""
+    """Fuse extracted fields and quality scores into a high-level decision.
+    
+    Args:
+        fields: Extracted document fields with confidence values.
+        quality: Quality assessment metadata.
+        field_min_confidence: Minimum acceptable confidence for fields.
+        quality_min_score: Minimum acceptable quality score.
+        engine_used: Primary engine identifier.
+        engine_chain: Sequence of engines in processing chain.
+        
+    Returns:
+        ValidationOutcome with decision, score, issues, and metadata.
+    """
     issues: List[str] = []
     decision = "OK"
     scores: List[float] = []
@@ -106,6 +135,15 @@ def _assess_quality_gate(
     quality: Dict[str, object],
     quality_min_score: float,
 ) -> Tuple[bool, float, List[str]]:
+    """Evaluate quality metrics against threshold.
+    
+    Args:
+        quality: Quality metadata with scores and hints.
+        quality_min_score: Minimum acceptable score threshold.
+        
+    Returns:
+        Tuple of (passed, score, issues list).
+    """
     score_min = _to_float(quality.get("score_min"))
     quality_passed = bool(quality.get("pass", True))
 
@@ -128,6 +166,14 @@ def _assess_quality_gate(
 
 
 def _to_float(value: object) -> float | None:
+    """Safely convert value to float.
+    
+    Args:
+        value: Value to convert.
+        
+    Returns:
+        Float value or None if conversion fails.
+    """
     try:
         return float(value) if value is not None else None
     except (TypeError, ValueError):

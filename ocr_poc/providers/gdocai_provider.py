@@ -22,6 +22,17 @@ class GoogleDocAiProvider:
         processor_id: str,
         extractor_processor_id: str | None = None,
     ) -> None:
+        """Initialize Google Document AI provider client.
+        
+        Args:
+            project_id: GCP project ID.
+            location: Processor location (e.g., us, eu).
+            processor_id: Document AI processor identifier.
+            extractor_processor_id: Optional custom extractor processor ID.
+            
+        Raises:
+            ValueError: If required parameters are missing.
+        """
         if not project_id or not location or not processor_id:
             raise ValueError("Projeto, localização e processor_id são obrigatórios.")
 
@@ -38,7 +49,18 @@ class GoogleDocAiProvider:
         self._extractor_processor_id = extractor_processor_id
 
     def process_bytes(self, image_bytes: bytes, mime_type: str | None = None) -> dict:
-        """Submit raw image/PDF bytes to Document AI and normalise the response."""
+        """Submit raw image/PDF bytes to Document AI and normalise the response.
+        
+        Args:
+            image_bytes: Raw image or PDF file content.
+            mime_type: MIME type of the document.
+            
+        Returns:
+            Dictionary with quality metrics, extracted lines, and raw payload.
+            
+        Raises:
+            RuntimeError: If Document AI processing fails.
+        """
         clean_mime = mime_type or "application/pdf"
         raw_document = documentai.RawDocument(
             content=image_bytes,
@@ -76,14 +98,28 @@ class GoogleDocAiProvider:
         }
 
     def try_wb_extractor(self, image_bytes: bytes, mime_type: str | None = None) -> None:
-        """Hook para o Custom Extractor do Workbench (stub para pós-MVP)."""
+        """Hook for Workbench Custom Extractor (stub for post-MVP implementation).
+        
+        Args:
+            image_bytes: Raw image or PDF file content.
+            mime_type: MIME type of the document.
+            
+        Returns:
+            None (implementation pending).
+        """
         if not self._extractor_processor_id:
             return
-        # TODO: Implementar chamada ao processor customizado quando disponível.
 
 
 def guess_mime_type(filename: str | None) -> str:
-    """Infer a MIME type based on the filename."""
+    """Infer a MIME type based on the filename.
+    
+    Args:
+        filename: Name of the file to analyze.
+        
+    Returns:
+        MIME type string, defaults to application/octet-stream.
+    """
     if not filename:
         return "application/octet-stream"
     mime_type, _ = mimetypes.guess_type(filename)
@@ -93,7 +129,14 @@ def guess_mime_type(filename: str | None) -> str:
 def _extract_lines(
     document: document_types.Document,
 ) -> List[dict]:
-    """Normalise lines returned by Document AI into a flat list."""
+    """Normalise lines returned by Document AI into a flat list.
+    
+    Args:
+        document: Processed Document AI document object.
+        
+    Returns:
+        List of dictionaries with text, confidence, bbox, and page.
+    """
     text = document.text or ""
     results: List[dict] = []
     for page_index, page in enumerate(document.pages, start=1):
@@ -115,7 +158,15 @@ def _extract_lines(
 
 
 def _layout_to_text(layout: document_types.Document.Page.Layout, text: str) -> str:
-    """Convert a text anchor into readable string."""
+    """Convert a text anchor into readable string.
+    
+    Args:
+        layout: Layout object containing text anchor.
+        text: Full document text for extracting segments.
+        
+    Returns:
+        Extracted and concatenated text string.
+    """
     anchor = layout.text_anchor
     if not anchor.text_segments:
         return ""
@@ -130,7 +181,14 @@ def _layout_to_text(layout: document_types.Document.Page.Layout, text: str) -> s
 def _bounding_box(
     bounding_poly: BoundingPoly | None,
 ) -> List[float]:
-    """Convert a bounding poly into a simplified [x0, y0, x1, y1] box."""
+    """Convert a bounding poly into a simplified [x0, y0, x1, y1] box.
+    
+    Args:
+        bounding_poly: Polygon defining text element boundaries.
+        
+    Returns:
+        Normalized bounding box coordinates [x_min, y_min, x_max, y_max].
+    """
     if not bounding_poly:
         return [0.0, 0.0, 0.0, 0.0]
     vertices = _resolve_vertices(bounding_poly)
@@ -148,14 +206,28 @@ def _bounding_box(
 def _resolve_vertices(
     bounding_poly: BoundingPoly,
 ) -> Sequence[NormalizedVertex]:
-    """Return normalised vertices whenever possible."""
+    """Return normalised vertices whenever possible.
+    
+    Args:
+        bounding_poly: Polygon with vertices.
+        
+    Returns:
+        Sequence of normalized vertices or fallback to absolute vertices.
+    """
     if bounding_poly.normalized_vertices:
         return bounding_poly.normalized_vertices
     return bounding_poly.vertices
 
 
 def _extract_quality(pages: Iterable[document_types.Document.Page]) -> dict:
-    """Aggregate quality scores and reasons across pages."""
+    """Aggregate quality scores and reasons across pages.
+    
+    Args:
+        pages: Document pages with quality metadata.
+        
+    Returns:
+        Dictionary with score_min, score_avg, and detected defects.
+    """
     scores: List[float] = []
     defects: set[str] = set()
     for page in pages:

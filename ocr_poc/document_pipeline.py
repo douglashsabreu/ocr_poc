@@ -18,6 +18,20 @@ from ocr_poc.quality.gate import assess_quality
 
 @dataclass
 class PipelineOutcome:
+    """Encapsulates the complete result of processing a single document.
+
+    Attributes:
+        source_path: Path to the original source file.
+        mode: Processing mode used (gdocai, datalab_api, etc.).
+        engine_used: Primary OCR engine that produced the final result.
+        engine_chain: List of all engines invoked during processing.
+        normalized: Normalized OCR data with lines, quality, and metadata.
+        quality_gate: Quality assessment result with pass/fail and scores.
+        artifacts: Additional processing artifacts (raw payloads, intermediate results).
+        latencies: Processing time measurements for each stage.
+        skipped_extraction: True if processing stopped early due to quality gate rejection.
+    """
+
     source_path: Path
     mode: str
     engine_used: str
@@ -38,6 +52,13 @@ class DocumentPipeline:
         repository: ImageRepository,
         logger: logging.Logger | None = None,
     ) -> None:
+        """Initialize the document processing pipeline.
+
+        Args:
+            settings: Application configuration containing API credentials and thresholds.
+            repository: Image repository providing access to source files.
+            logger: Optional logger instance for pipeline events.
+        """
         self._settings = settings
         self._repository = repository
         self._logger = logger or logging.getLogger(__name__)
@@ -47,7 +68,11 @@ class DocumentPipeline:
         if settings.pipeline_mode in {"datalab_api", "openai_api"}:
             self._datalab_client = DatalabApiClient(settings)
 
-        if settings.gdoc_project_id and settings.gdoc_location and settings.gdoc_processor_id:
+        if (
+            settings.gdoc_project_id
+            and settings.gdoc_location
+            and settings.gdoc_processor_id
+        ):
             self._gdoc_provider = GoogleDocAiProvider(
                 settings.gdoc_project_id,
                 settings.gdoc_location,
@@ -56,13 +81,22 @@ class DocumentPipeline:
             )
 
     def close(self) -> None:
+        """Release resources held by OCR clients and providers."""
         if self._datalab_client:
             self._datalab_client.close()
 
     def run(self) -> Iterator[PipelineOutcome]:
+        """Execute the pipeline over all files in the repository.
+
+        Yields:
+            PipelineOutcome: Processing result for each file, including OCR data,
+                quality assessment, artifacts, and latency measurements.
+        """
         files = self._repository.list_files()
         if not files:
-            self._logger.warning("Nenhum arquivo suportado encontrado para processamento.")
+            self._logger.warning(
+                "Nenhum arquivo suportado encontrado para processamento."
+            )
             return
 
         for path in files:
@@ -79,8 +113,18 @@ class DocumentPipeline:
             except Exception:  # noqa: BLE001
                 self._logger.exception("Falha ao processar o arquivo %s", path)
 
-    # ------------------------------------------------------------------#
     def _process_file(self, path: Path) -> PipelineOutcome:
+        """Route file processing to the appropriate provider based on configured mode.
+
+        Args:
+            path: Path to the file to process.
+
+        Returns:
+            PipelineOutcome containing normalized OCR data and quality metrics.
+
+        Raises:
+            RuntimeError: If the pipeline mode is not supported.
+        """
         mode = self._settings.pipeline_mode
         if mode == "gdocai":
             return self._process_with_gdoc(path)
@@ -89,6 +133,17 @@ class DocumentPipeline:
         raise RuntimeError(f"Modo de pipeline não suportado para o novo fluxo: {mode}")
 
     def _process_with_gdoc(self, path: Path) -> PipelineOutcome:
+        """Process file using Google Document AI OCR processor.
+
+        Args:
+            path: Path to the file to process.
+
+        Returns:
+            PipelineOutcome with Google Document AI results and quality assessment.
+
+        Raises:
+            RuntimeError: If Google Document AI is not properly configured.
+        """
         if not self._gdoc_provider:
             raise RuntimeError(
                 "Google Document AI não configurado. Defina GDOC_PROJECT_ID, GDOC_LOCATION e GDOC_PROCESSOR_ID."
@@ -102,7 +157,9 @@ class DocumentPipeline:
         latency_gdoc = time.perf_counter() - start
 
         normalized = normalize_to_lines_and_meta("gdocai", result)
-        quality = self._run_quality_gate(normalized.get("quality"), self._settings.quality_min_score)
+        quality = self._run_quality_gate(
+            normalized.get("quality"), self._settings.quality_min_score
+        )
         normalized["quality"] = quality
 
         artifacts = {
@@ -110,7 +167,9 @@ class DocumentPipeline:
         }
         if self._settings.gdoc_extractor_processor_id:
             try:
-                extractor_payload = self._gdoc_provider.try_wb_extractor(image_bytes, mime_type)
+                extractor_payload = self._gdoc_provider.try_wb_extractor(
+                    image_bytes, mime_type
+                )
                 if extractor_payload:
                     artifacts["gdocai_extractor"] = extractor_payload
             except Exception:  # noqa: BLE001
@@ -142,6 +201,21 @@ class DocumentPipeline:
         return outcome
 
     def _process_with_datalab(self, path: Path) -> PipelineOutcome:
+        """Process file using Datalab API with optional Google quality gate pre-check.
+
+        When quality gate is enabled, performs fast quality assessment via Google
+        Document AI before calling Datalab. If quality fails threshold, returns
+        early with quality rejection details. Otherwise proceeds with Datalab OCR.
+
+        Args:
+            path: Path to the file to process.
+
+        Returns:
+            PipelineOutcome with Datalab results, optional gate metrics, and quality assessment.
+
+        Raises:
+            RuntimeError: If Datalab client is not initialized.
+        """
         if not self._datalab_client:
             raise RuntimeError("Cliente da API Datalab não inicializado.")
 
@@ -241,6 +315,15 @@ class DocumentPipeline:
         quality_metrics: Dict[str, Any] | None,
         threshold: float,
     ) -> Dict[str, Any]:
+        """Evaluate quality metrics against configured threshold.
+
+        Args:
+            quality_metrics: Quality scores and reasons from OCR provider.
+            threshold: Minimum acceptable quality score.
+
+        Returns:
+            Quality gate result with pass/fail status, scores, reasons, and hints.
+        """
         quality_metrics = quality_metrics or {}
         if quality_metrics.get("score_min") is None:
             return {

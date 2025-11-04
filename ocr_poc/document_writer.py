@@ -22,11 +22,31 @@ class DocumentResultWriter:
         field_min_confidence: float,
         quality_min_score: float,
     ) -> None:
+        """Initialize the document result writer.
+        
+        Args:
+            output_dir: Directory where output artifacts will be saved.
+            field_min_confidence: Minimum confidence threshold for extracted fields.
+            quality_min_score: Minimum quality score threshold for documents.
+        """
         self._output_dir = output_dir
         self._field_min_confidence = field_min_confidence
         self._quality_min_score = quality_min_score
 
     def write(self, outcome: PipelineOutcome) -> Dict[str, object]:
+        """Write pipeline outcome to structured output files.
+        
+        Creates JSON, text, validation JSON, PDF report, and optional raw payload
+        files in a dedicated subdirectory for each processed document.
+        
+        Args:
+            outcome: Complete pipeline processing result including OCR data,
+                quality metrics, and artifacts.
+                
+        Returns:
+            Dictionary mapping artifact names to their file paths, including
+            validation data object.
+        """
         target_dir = self._output_dir / outcome.source_path.stem
         target_dir.mkdir(parents=True, exist_ok=True)
 
@@ -92,8 +112,13 @@ class DocumentResultWriter:
             "validation_data": validation,
         }
 
-    # ------------------------------------------------------------------#
     def _write_json(self, path: Path, payload: object) -> None:
+        """Write payload as formatted JSON file.
+        
+        Args:
+            path: Destination file path.
+            payload: Object to serialize to JSON.
+        """
         path.write_text(
             json.dumps(self._to_jsonable(payload), indent=2, ensure_ascii=False),
             encoding="utf-8",
@@ -106,6 +131,14 @@ class DocumentResultWriter:
         validation: ValidationOutcome,
         full_text: str,
     ) -> None:
+        """Write human-readable summary of pipeline results.
+        
+        Args:
+            path: Destination file path.
+            outcome: Pipeline processing result.
+            validation: Validation outcome with decision and extracted fields.
+            full_text: Complete OCR text extracted from document.
+        """
         sections = [
             f"Arquivo: {outcome.source_path.name}",
             f"Modo selecionado: {outcome.mode}",
@@ -138,6 +171,14 @@ class DocumentResultWriter:
         path.write_text("\n".join(sections), encoding="utf-8")
 
     def _to_jsonable(self, payload):
+        """Recursively convert payload to JSON-serializable types.
+        
+        Args:
+            payload: Object to convert.
+            
+        Returns:
+            JSON-serializable representation of the payload.
+        """
         if isinstance(payload, (str, int, float, bool)) or payload is None:
             return payload
         if isinstance(payload, list):

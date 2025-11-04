@@ -1,3 +1,5 @@
+"""Main entry point for OCR proof of concept pipeline execution."""
+
 import argparse
 import logging
 from pathlib import Path
@@ -11,6 +13,10 @@ from ocr_poc.image_repository import ImageRepository
 
 
 def configure_logging() -> None:
+    """Configure logging settings for the application.
+    
+    Sets up basic logging configuration with INFO level and structured format.
+    """
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -18,6 +24,12 @@ def configure_logging() -> None:
 
 
 def parse_args() -> argparse.Namespace:
+    """Parse command line arguments for OCR pipeline execution.
+    
+    Returns:
+        argparse.Namespace: Parsed command line arguments containing mode, 
+            gate settings, and directory paths.
+    """
     parser = argparse.ArgumentParser(description="Executa pipelines de OCR da POC.")
     parser.add_argument(
         "--mode",
@@ -43,6 +55,12 @@ def parse_args() -> argparse.Namespace:
 
 
 def run_chandra_pipeline(settings: AppSettings, repository: ImageRepository) -> None:
+    """Execute OCR pipeline using Chandra OCR client.
+    
+    Args:
+        settings: Application configuration settings.
+        repository: Image repository containing files to process.
+    """
     from ocr_poc.image_loader import ImageLoader
     from ocr_poc.ocr_client import ChandraOCRClient
     from ocr_poc.pipeline import OCRPipeline
@@ -63,6 +81,12 @@ def run_chandra_pipeline(settings: AppSettings, repository: ImageRepository) -> 
 
 
 def run_openai_pipeline(settings: AppSettings, repository: ImageRepository) -> None:
+    """Execute OCR pipeline using OpenAI multimodal API.
+    
+    Args:
+        settings: Application configuration settings.
+        repository: Image repository containing files to process.
+    """
     from ocr_poc.api_pipeline import DatalabApiPipeline
     from ocr_poc.datalab_writer import DatalabApiResultWriter
     from ocr_poc.openai_client import OpenAIOCRClient
@@ -82,6 +106,16 @@ def run_openai_pipeline(settings: AppSettings, repository: ImageRepository) -> N
 def run_document_mode_pipeline(
     settings: AppSettings, repository: ImageRepository
 ) -> None:
+    """Execute document processing pipeline with validation and quality gating.
+    
+    Processes documents through OCR providers (Datalab or Google Document AI),
+    applies quality gates, performs field extraction and validation, and 
+    generates structured output artifacts with detailed logging.
+    
+    Args:
+        settings: Application configuration settings.
+        repository: Image repository containing files to process.
+    """
     pipeline = DocumentPipeline(
         settings,
         repository,
@@ -127,6 +161,11 @@ def run_document_mode_pipeline(
 
 
 def main() -> None:
+    """Main application entry point.
+    
+    Loads configuration, parses arguments, initializes the appropriate pipeline
+    based on the selected mode, and executes OCR processing.
+    """
     args = parse_args()
     load_dotenv()
     overrides = {}

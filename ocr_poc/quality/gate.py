@@ -20,7 +20,16 @@ _SUGGESTIONS = {
 def assess_quality(
     quality_metrics: Mapping[str, object] | None, min_score: float
 ) -> dict:
-    """Evaluate whether the document passes the minimum quality threshold."""
+    """Evaluate whether the document passes the minimum quality threshold.
+    
+    Args:
+        quality_metrics: Quality scores and reasons from OCR provider.
+        min_score: Minimum acceptable quality score threshold.
+        
+    Returns:
+        Dictionary with quality assessment including pass/fail status,
+        scores, normalized reasons, and actionable hints.
+    """
     quality_metrics = quality_metrics or {}
     score_min = _to_float(quality_metrics.get("score_min"))
     score_avg = _to_float(quality_metrics.get("score_avg"))
@@ -40,12 +49,27 @@ def assess_quality(
 
 
 def _map_reason_to_hint(reason: str) -> str | None:
-    """Translate Document AI quality reasons into actionable hints."""
+    """Translate Document AI quality reasons into actionable hints.
+    
+    Args:
+        reason: Quality issue reason code from Document AI.
+        
+    Returns:
+        User-friendly suggestion for improving capture quality, or None.
+    """
     key = reason.split(" ", 1)[0]
     return _SUGGESTIONS.get(key)
 
 
 def _normalise_reasons(reasons: Iterable[object]) -> Iterable[str]:
+    """Normalize quality reasons from various provider formats to strings.
+    
+    Args:
+        reasons: Quality reasons in various formats (strings, dicts, objects).
+        
+    Yields:
+        Normalized reason strings.
+    """
     for reason in reasons:
         if isinstance(reason, str):
             yield reason
@@ -58,6 +82,14 @@ def _normalise_reasons(reasons: Iterable[object]) -> Iterable[str]:
 
 
 def _to_float(value: object) -> float | None:
+    """Safely convert value to float.
+    
+    Args:
+        value: Value to convert.
+        
+    Returns:
+        Float value or None if conversion fails.
+    """
     try:
         return float(value) if value is not None else None
     except (TypeError, ValueError):
