@@ -23,7 +23,7 @@ class AppSettings(BaseSettings):
     inference_method: Literal["vllm", "hf"] = Field(
         "vllm", alias="CHANDRA_INFERENCE_METHOD"
     )
-    pipeline_mode: Literal["chandra", "datalab_api", "openai_api"] = Field(
+    pipeline_mode: Literal["chandra", "datalab_api", "openai_api", "gdocai"] = Field(
         "datalab_api", alias="PIPELINE_MODE"
     )
     openai_api_key: str | None = Field(None, alias="OPENAI_API_KEY")
@@ -45,6 +45,15 @@ class AppSettings(BaseSettings):
     api_max_poll_attempts: int = Field(60, alias="API_MAX_POLL_ATTEMPTS")
     api_http_timeout_seconds: float = Field(60.0, alias="API_HTTP_TIMEOUT_SECONDS")
     api_endpoint: str = Field("ocr", alias="API_ENDPOINT")
+    gdoc_project_id: str | None = Field(None, alias="GDOC_PROJECT_ID")
+    gdoc_location: str | None = Field(None, alias="GDOC_LOCATION")
+    gdoc_processor_id: str | None = Field(None, alias="GDOC_PROCESSOR_ID")
+    gdoc_extractor_processor_id: str | None = Field(
+        None, alias="GDOC_EXTRACTOR_PROCESSOR_ID"
+    )
+    quality_min_score: float = Field(0.55, alias="QUALITY_MIN_SCORE")
+    field_min_confidence: float = Field(0.75, alias="FIELD_MIN_CONFIDENCE")
+    use_gdoc_ai_gate: bool = Field(False, alias="USE_GDOC_AI_GATE")
 
     @model_validator(mode="after")
     def _ensure_directories(self) -> "AppSettings":

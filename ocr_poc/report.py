@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from pathlib import Path
-from typing import Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from PIL import Image as PILImage
 from reportlab.lib import colors
@@ -20,7 +20,9 @@ from reportlab.platypus import (
 )
 
 from ocr_poc.datalab_client import DatalabApiResult
+from ocr_poc.document_pipeline import PipelineOutcome
 from ocr_poc.validation import DeliveryValidation
+from ocr_poc.validation.engine import ValidationOutcome
 
 
 def build_delivery_report(
@@ -76,6 +78,68 @@ def build_delivery_report(
     story.append(Paragraph("Imagem do Canhoto", styles["Section"]))
     story.append(Paragraph("Visualização do documento analisado.", styles["Body"]))
     story.append(Spacer(1, 10))
+    story.append(_build_image_frame(source_file, doc.width))
+
+    doc.build(story)
+
+
+def build_validation_report(
+    output_path: Path,
+    source_file: Path,
+    outcome: PipelineOutcome,
+    validation: ValidationOutcome,
+) -> None:
+    """Gera o PDF de validação unificado para os novos modos."""
+
+    doc = SimpleDocTemplate(
+        str(output_path),
+        pagesize=A4,
+        leftMargin=22 * mm,
+        rightMargin=22 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        title="Resumo de Validação",
+        author="ocr-poc",
+    )
+
+    styles = _build_stylesheet()
+    story = []
+
+    story.append(Paragraph("Resumo da Validação", styles["Title"]))
+    story.append(Paragraph("Status geral", styles["Section"]))
+    story.append(_build_decision_badge(validation.decision, styles))
+    story.append(Spacer(1, 8))
+    story.append(
+        _build_summary_table_v2(source_file, outcome, validation, styles)
+    )
+
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Campos extraídos", styles["Section"]))
+    story.append(_build_fields_table(validation, styles))
+
+    if validation.issues:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("Pendências", styles["Section"]))
+        for issue in validation.issues:
+            story.append(Paragraph(f"• {issue}", styles["Body"]))
+
+    hints = validation.quality.get("hints") or []
+    if hints:
+        story.append(Spacer(1, 10))
+        story.append(Paragraph("Sugestões de captura", styles["Section"]))
+        for hint in hints:
+            story.append(Paragraph(f"• {hint}", styles["Body"]))
+
+    story.append(Spacer(1, 12))
+    story.append(Paragraph("Amostra de texto OCR", styles["Section"]))
+    sample_lines = [line.get("text") for line in (outcome.normalized.get("lines") or [])]
+    sample = "<br/>".join(_escape_html(line) for line in sample_lines[:20] if line)
+    story.append(Paragraph(sample or "Nenhum texto disponível.", styles["Small"]))
+
+    story.append(PageBreak())
+    story.append(Paragraph("Imagem do Documento", styles["Section"]))
+    story.append(Paragraph("Visualização do arquivo processado.", styles["Body"]))
+    story.append(Spacer(1, 8))
     story.append(_build_image_frame(source_file, doc.width))
 
     doc.build(story)
@@ -193,6 +257,124 @@ def _build_summary_table(
         )
     )
     return table
+
+
+def _build_summary_table_v2(
+    source_file: Path,
+    outcome: PipelineOutcome,
+    validation: ValidationOutcome,
+    styles: StyleSheet1,
+) -> Table:
+    quality = validation.quality or {}
+    data = [
+        ["Arquivo origem", source_file.name],
+        ["Engine", validation.engine_used or outcome.engine_used],
+        ["Cadeia", ", ".join(validation.engine_chain) or "-"],
+        ["Decisão", validation.decision],
+        ["Decision score", f"{validation.decision_score:.2f}"],
+        ["Qualidade mínima", _format_optional_float(quality.get("threshold"))],
+        ["Quality score (min)", _format_optional_float(quality.get("score_min"))],
+        ["Quality score (avg)", _format_optional_float(quality.get("score_avg"))],
+        ["Latências (s)", _format_latencies(outcome.latencies)],
+    ]
+
+    table = Table(data, colWidths=[65 * mm, 90 * mm], hAlign="LEFT")
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#DBEAFE")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1E3A8A")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("FONTNAME", (0, 1), (0, -1), "Helvetica-Bold"),
+                ("FONTNAME", (1, 1), (1, -1), "Helvetica"),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+                ("LEFTPADDING", (0, 0), (-1, -1), 6),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.HexColor("#93C5FD")),
+                ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#2563EB")),
+                ("GRID", (0, 1), (-1, -1), 0.25, colors.HexColor("#E5E7EB")),
+            ]
+        )
+    )
+    return table
+
+
+def _build_fields_table(validation: ValidationOutcome, styles: StyleSheet1) -> Table:
+    fields = validation.fields or {}
+    data: List[List[str]] = [["Campo", "Valor", "Confiança", "Página", "BBox"]]
+    for name, field in fields.items():
+        bbox = (
+            ", ".join(f"{coord:.2f}" for coord in field.bbox)
+            if field.bbox and isinstance(field.bbox, (list, tuple))
+            else "-"
+        )
+        data.append(
+            [
+                name,
+                str(field.value) if field.value is not None else "-",
+                _format_optional_float(field.confidence),
+                str(field.page or "-"),
+                bbox,
+            ]
+        )
+    table = Table(
+        data,
+        colWidths=[35 * mm, 60 * mm, 22 * mm, 16 * mm, 35 * mm],
+        hAlign="LEFT",
+    )
+    table.setStyle(
+        TableStyle(
+            [
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#FDE68A")),
+                ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#92400E")),
+                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+                ("FONTSIZE", (0, 0), (-1, -1), 9),
+                ("TOPPADDING", (0, 0), (-1, -1), 4),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                ("LEFTPADDING", (0, 0), (-1, -1), 4),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 4),
+                ("BACKGROUND", (0, 1), (-1, -1), colors.white),
+                ("GRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#FCD34D")),
+            ]
+        )
+    )
+    return table
+
+
+def _build_decision_badge(decision: str, styles: StyleSheet1) -> Paragraph:
+    lookup = {
+        "OK": ("DOCUMENTO APROVADO", colors.HexColor("#0EA5E9")),
+        "NEEDS_REVIEW": ("PRECISA DE REVISÃO", colors.HexColor("#F97316")),
+        "REPROVADO": ("REPROVADO", colors.HexColor("#DC2626")),
+    }
+    label, color = lookup.get(
+        decision.upper(), ("STATUS DESCONHECIDO", colors.HexColor("#6B7280"))
+    )
+    style = ParagraphStyle(name="DecisionBadge", parent=styles["Badge"], backColor=color)
+    return Paragraph(label, style)
+
+
+def _format_optional_float(value: object) -> str:
+    try:
+        if value is None:
+            return "-"
+        return f"{float(value):.2f}"
+    except (TypeError, ValueError):
+        return "-"
+
+
+def _format_latencies(latencies: Dict[str, float]) -> str:
+    if not latencies:
+        return "-"
+    parts = []
+    for key, value in latencies.items():
+        parts.append(f"{key}: {value:.2f}s")
+    return "; ".join(parts)
 
 
 def _render_info_lists(
