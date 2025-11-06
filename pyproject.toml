@@ -5,6 +5,8 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "azure-storage-blob>=12.27.1",
+    "azure-storage-queue>=12.14.1",
     "chandra-ocr",
     "google-cloud-documentai>=3.7.0",
     "openai>=2.6.1",
